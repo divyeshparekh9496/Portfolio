@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portfolio Landing Page</title>
+  <!--
+  =============================================================
+  SETUP: Publish View-Only on GitHub Pages, Keep Edit Mode Locally
+  =============================================================
+  1) Save this file as `index.html` in your repo.
+  2) Push to GitHub (main branch).
+  3) Enable GitHub Pages: Repo → Settings → Pages →
+     Source: Deploy from a branch → Branch: `main` (folder `/` or `/docs`).
+  4) Public site will be View-Only automatically. Edit toggle is hidden.
+  5) Local editing options:
+     • Run a local server (e.g., `npx serve` or `python -m http.server`).
+     • Open http://localhost:PORT/?edit=1  (OR in DevTools run: localStorage.setItem('edit','1'); refresh)
+     • You'll see Edit mode and the toggle button.
+
+  Notes
+  - `ALLOW_EDIT` gate below enforces View-Only on *.github.io.
+  - Tests & debug UI only run when ALLOW_EDIT is true.
+  - No React/Babel required; everything is vanilla JS + Tailwind.
+  =============================================================
+  -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { --accent:#23c3ff; }
+    body { background:#000; color:#fff; font-family: Arial, sans-serif; overflow-x:hidden; }
+    .project-card { transition: transform .3s ease, box-shadow .3s ease; }
+    .project-card:hover { transform: translateY(-6px); box-shadow: 0 0 40px rgba(35,195,255,.15); }
+    .fade-in { opacity:0; animation: fadeIn .48s ease-in forwards; }
+    @keyframes fadeIn { to { opacity:1; } }
+    .floating { animation: float 3s ease-in-out infinite; }
+    @keyframes float { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-8px);} }
+    canvas#starfield { position:fixed; inset:0; z-index:-1; }
+
+    /* Overlay styling */
+    .overlay-backdrop { position: fixed; inset: 0; background: radial-gradient(1200px 800px at 30% 20%, rgba(35,195,255,.10), transparent 60%), rgba(0,0,0,.78); backdrop-filter: blur(6px); }
+    .overlay-card { position: fixed; inset: 5%; background: linear-gradient(180deg,#070a0d 0%, #0a0f14 100%); border-radius: 28px; box-shadow: 0 10px 50px rgba(0,0,0,.6); overflow: hidden; transform: scale(.96); opacity:0; animation: overlayIn .36s cubic-bezier(.2,.6,.2,1) forwards; border: 1px solid rgba(255,255,255,.06); }
+    @keyframes overlayIn { to { transform: scale(1); opacity:1; } }
+    .iphone { width:260px; height:520px; border-radius:36px; background:#0b0f13; box-shadow: inset 0 0 0 2px #1b2026, 0 10px 30px rgba(0,0,0,.5); padding:16px; }
+    .iphone-screen { width:100%; height:100%; border-radius:28px; background: linear-gradient(180deg,#0e1318,#0d141b); padding:14px; display:flex; flex-direction:column; gap:12px; box-shadow: inset 0 0 30px rgba(0,0,0,.5); }
+    .mini-card { background:#0c1218; border-radius:14px; padding:10px; box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset; }
+    @keyframes grow { from { width: 8%; } to { width: 92%; } }
+    .zoom-cue { animation: zoomPulse 320ms ease forwards; }
+    @keyframes zoomPulse { 50% { transform: scale(1.03); } 100% { transform: scale(1); } }
+
+    /* Seamless text look */
+    .seamless { background: transparent; border: 0; outline: none; }
+  </style>
+</head>
+<body>
+  <canvas id="starfield"></canvas>
+  <div id="app" class="min-h-screen flex flex-col items-center justify-center p-8"></div>
+  <div id="overlay-root"></div>
+  <div id="test-results" class="fixed left-4 bottom-4 bg-black/70 text-white p-3 rounded-lg text-sm"></div>
+
+  <!-- Edit/View guard: View-only on GitHub Pages, Edit allowed locally or with ?edit=1/localStorage -->
+  <script>
+    const IS_GHPAGES = location.hostname.endsWith('github.io');
+    const url = new URL(location.href);
+    const q = url.searchParams;
+    const ALLOW_EDIT = !IS_GHPAGES && (
+      location.hostname === 'localhost' ||
+      location.hostname === '127.0.0.1' ||
+      q.get('edit') === '1' ||
+      localStorage.getItem('edit') === '1'
+    );
+  </script>
+
+  <script>
+    // --------- App State ---------
+    const state = {
+      isCreatorMode: ALLOW_EDIT, // default View mode on GH Pages; Edit locally
+      heading: 'AI-Powered Future: Building useful products',
+      summary: 'A showcase of useful projects built with integrating Machine Learning and Computer Vision in various industries like-Renewable Energy, Automobile, and Communications',
+      projects: [
+        { title: 'NLP AI Assistant with GloVe Model', description: 'An advanced AI assistant leveraging GloVe for natural language processing. Trained with Dialogflow and intent modeling, it delivers seamless conversational experiences, understanding user queries with high accuracy.' },
+        { title: 'PV Energy and Storage Systems', description: 'Designed photovoltaic systems for ground mounts and residential setups. Integrated energy storage solutions optimize efficiency and reliability, enabling sustainable power for diverse applications.' },
+        { title: 'ML-Integrated Design Tools', description: 'Developed design tools powered by machine learning algorithms and a robust data engine. Streamlines workflows by automating data processing and enhancing creative output for designers.' },
+        { title: 'AI-Controlled Electrical Drive System', description: 'An AI system using computer vision and MATLAB to control electrical drive speeds via hand gestures. Enables intuitive, real-time interaction for precise motor control in industrial applications.' },
+        { title: 'AI Accelerators Workload Management', description: 'Created systems to optimize workload distribution for AI accelerators. Enhances computational efficiency, reducing latency and improving performance in high-demand AI processing environments.' },
+        { title: 'DRL Solar Farm Simulation Engine', description: 'Built a simulation engine for solar farms using deep reinforcement learning. The DRL model autonomously learns to design, build, and maintain efficient solar farms, maximizing energy output.' },
+      ],
+      pvOpen:false
+    };
+
+    // --------- Helpers ---------
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const el = (tag, className, text) => { const n=document.createElement(tag); if (className) n.className = String(className); if (text!=null) n.textContent = String(text); return n; };
+
+    // --------- Render ---------
+    function renderApp(){
+      const root = document.getElementById('app');
+      root.innerHTML = '';
+
+      // Toggle button (only if editing allowed)
+      if (ALLOW_EDIT) {
+        const btn = el('button','fixed top-4 right-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg z-50 transition-colors');
+        btn.textContent = state.isCreatorMode? 'Switch to View Mode' : 'Switch to Edit Mode';
+        btn.onclick = ()=>{ state.isCreatorMode = !state.isCreatorMode; renderApp(); };
+        root.appendChild(btn);
+      }
+
+      const container = el('div','text-center mb-12 fade-in');
+      if (state.isCreatorMode){
+        const titleInput = el('input','seamless title-input text-4xl md:text-5xl font-bold mb-4 text-center');
+        titleInput.style.width='100%'; titleInput.style.maxWidth='1200px';
+        titleInput.value = state.heading;
+        titleInput.oninput = (e)=>{ state.heading = e.target.value; };
+
+        const summaryInput = el('textarea','seamless summary-input text-lg');
+        summaryInput.style.width='100%'; summaryInput.style.maxWidth='1000px';
+        summaryInput.rows = 3; summaryInput.maxLength = 250; summaryInput.value = state.summary;
+        summaryInput.oninput = (e)=>{ state.summary = e.target.value; };
+
+        container.appendChild(titleInput);
+        container.appendChild(summaryInput);
+      } else {
+        const h1 = el('h1','title-input text-4xl md:text-5xl font-bold mb-4', state.heading);
+        h1.style.maxWidth='1200px'; h1.style.margin='0 auto';
+        const p = el('p','summary-input text-lg', state.summary);
+        p.style.maxWidth='1000px'; p.style.margin='0 auto';
+        container.appendChild(h1);
+        container.appendChild(p);
+      }
+      root.appendChild(container);
+
+      // Projects grid
+      const grid = el('div','flex flex-wrap justify-center');
+      state.projects.forEach((project, index)=>{
+        const card = el('div', 'project-card bg-black p-6 rounded-lg m-4 w-full md:w-[calc(50%-2rem)] lg:w-[calc(33.33%-2rem)] floating');
+        card.style.animationDelay = (index*0.2)+'s';
+
+        const h3 = el('h3','text-xl font-bold mb-4', project.title);
+        card.appendChild(h3);
+
+        if (state.isCreatorMode){
+          const ta = el('textarea','w-full h-32 seamless text-white p-2 resize-none');
+          ta.value = project.description;
+          ta.maxLength = 250;
+          ta.oninput = (e)=>{ state.projects[index].description = e.target.value; };
+          card.appendChild(ta);
+        } else {
+          const p = el('p','w-full h-32 text-white p-2 overflow-y-auto', project.description);
+          card.appendChild(p);
+        }
+
+        // PV interactive overlay (only in view mode)
+        if (!state.isCreatorMode && project.title === 'PV Energy and Storage Systems'){
+          card.classList.add('cursor-pointer');
+          card.onclick = (e)=>{ card.classList.add('zoom-cue'); setTimeout(()=>card.classList.remove('zoom-cue'), 340); openPVOverlay(); };
+        }
+
+        grid.appendChild(card);
+      });
+      root.appendChild(grid);
+    }
+
+    // --------- PV Overlay ---------
+    function openPVOverlay(){
+      state.pvOpen = true;
+      const root = document.getElementById('overlay-root');
+      root.innerHTML = '';
+
+      const backdrop = el('div','overlay-backdrop');
+      const card = el('div','overlay-card');
+
+      const layout = el('div','w-full h-full grid grid-cols-1 lg:grid-cols-3 gap-6 p-6');
+      const vis = el('div','col-span-2 relative rounded-2xl');
+      const canvas = el('canvas','w-full h-full');
+      canvas.style.display='block';
+      vis.appendChild(canvas);
+      const label = el('div','absolute top-4 left-4 text-lg font-semibold tracking-wide');
+      label.style.color='var(--accent)';
+      label.textContent = 'PV ▸ Inverter ▸ Storage • Live Flow';
+      vis.appendChild(label);
+
+      const sidebar = el('div','flex items-center justify-center');
+      const iphone = el('div','iphone');
+      const screen = el('div','iphone-screen');
+      const head = el('div','text-sm text-gray-200 font-semibold'); head.textContent='PV Ops Dashboard';
+      screen.appendChild(head);
+      screen.appendChild(mkBar('Generation (kW)'));
+      screen.appendChild(mkBar('Battery SoC (%)'));
+      screen.appendChild(mkBar('Inverter Eff. (%)'));
+      screen.appendChild(mkMini('Energy Today','12.4 kWh'));
+      screen.appendChild(mkMini('Temp','36°C • Nominal','text-blue-300'));
+      screen.appendChild(mkMini('Status','Charging batteries…','text-green-400'));
+      iphone.appendChild(screen); sidebar.appendChild(iphone);
+
+      const closeBtn = el('button','absolute top-4 right-6 text-white/80 hover:text-white text-xl','✕');
+      closeBtn.setAttribute('aria-label','Close');
+
+      layout.appendChild(vis); layout.appendChild(sidebar); layout.appendChild(closeBtn);
+      card.appendChild(layout);
+      backdrop.appendChild(card);
+      root.appendChild(backdrop);
+
+      // Close handlers
+      closeBtn.onclick = closePVOverlay; backdrop.onclick = (e)=>{ if(e.target===backdrop) closePVOverlay(); };
+
+      // Start canvas anim
+      startPVCanvas(canvas);
+    }
+
+    function closePVOverlay(){
+      state.pvOpen=false; document.getElementById('overlay-root').innerHTML='';
+    }
+
+    function mkMini(label, value, extraClass=''){
+      const wrap = el('div','mini-card');
+      const l = el('div','text-xs text-gray-300 mb-1', label);
+      const v = el('div', extraClass? ('text-sm '+extraClass):'text-2xl', value);
+      wrap.appendChild(l); wrap.appendChild(v); return wrap;
+    }
+    function mkBar(label){
+      const wrap = el('div','mini-card');
+      const l = el('div','text-xs text-gray-300 mb-1', label);
+      const track = el('div','w-full h-2 bg-black/40 rounded');
+      const fill = el('div','h-2 rounded');
+      fill.style.background='var(--accent)';
+      fill.style.animation='grow 2.2s ease-in-out infinite alternate';
+      track.appendChild(fill);
+      wrap.appendChild(l); wrap.appendChild(track); return wrap;
+    }
+
+    function startPVCanvas(canvas){
+      const ctx = canvas.getContext('2d');
+      let raf; function resize(){ const dpr = window.devicePixelRatio||1; const r=canvas.getBoundingClientRect(); canvas.width=Math.floor(r.width*dpr); canvas.height=Math.floor(r.height*dpr); }
+      resize(); window.addEventListener('resize', resize);
+
+      const wires = [
+        { p0:[80,160], p1:[220,120], p2:[360,160] },
+        { p0:[360,260], p1:[520,300], p2:[700,280] },
+        { p0:[360,200], p1:[540,180], p2:[760,160] },
+      ];
+      const dots = new Array(64).fill(0).map((_,i)=>({ t:i/64, speed: 0.002 + (i%11)/12000 }));
+      function bezier(p0,p1,p2,t){ const x=(1-t)*(1-t)*p0[0]+2*(1-t)*t*p1[0]+t*t*p2[0]; const y=(1-t)*(1-t)*p0[1]+2*(1-t)*t*p1[1]+t*t*p2[1]; return [x,y]; }
+      function varAccent(){ return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#23c3ff'; }
+
+      function draw(){
+        const dpr = window.devicePixelRatio||1; ctx.clearRect(0,0,canvas.width,canvas.height); ctx.save(); ctx.scale(dpr,dpr);
+        const g = ctx.createRadialGradient(200,120,20,200,120,240); g.addColorStop(0,'rgba(35,195,255,.08)'); g.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
+        // panels
+        for(let r=0;r<2;r++) for(let c=0;c<4;c++){ const x=40+c*80, y=100+r*60, w=70, h=44; const grd=ctx.createLinearGradient(x,y,x+w,y+h); grd.addColorStop(0,'#0a1824'); grd.addColorStop(1,'#173043'); ctx.fillStyle=grd; ctx.fillRect(x,y,w,h); ctx.strokeStyle='rgba(255,255,255,.06)'; ctx.lineWidth=1; for(let i=1;i<4;i++){ ctx.beginPath(); ctx.moveTo(x+i*(w/4),y); ctx.lineTo(x+i*(w/4),y+h); ctx.stroke(); } }
+        // inverter
+        ctx.fillStyle='#0c1016'; ctx.fillRect(330,150,70,70); ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.strokeRect(330,150,70,70); ctx.fillStyle=varAccent(); ctx.fillRect(334,156,62,10);
+        // batteries
+        for(let i=0;i<3;i++){ ctx.fillStyle='#0d1116'; ctx.fillRect(680,210+i*44,110,32); ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.strokeRect(680,210+i*44,110,32); }
+        // wires
+        ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,.2)'; wires.forEach(w=>{ ctx.beginPath(); ctx.moveTo(w.p0[0],w.p0[1]); ctx.quadraticCurveTo(w.p1[0],w.p1[1],w.p2[0],w.p2[1]); ctx.stroke(); });
+        // flow
+        dots.forEach((d,idx)=>{ d.t+=d.speed; if(d.t>1) d.t-=1; const w=wires[idx%wires.length]; const [x,y]=bezier(w.p0,w.p1,w.p2,d.t); ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fillStyle='rgba(35,195,255,.95)'; ctx.shadowColor='rgba(35,195,255,.6)'; ctx.shadowBlur=8; ctx.fill(); ctx.shadowBlur=0; });
+        ctx.restore(); raf=requestAnimationFrame(draw);
+      }
+      raf=requestAnimationFrame(draw);
+      canvas._cleanup = ()=>{ cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
+    }
+
+    // --------- Starfield ---------
+    (function(){
+      const canvas=document.getElementById('starfield'); const ctx=canvas.getContext('2d');
+      function size(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; } size();
+      const num=50; const stars=Array.from({length:num},()=>({ x:Math.random()*canvas.width, y:Math.random()*canvas.height, r:Math.random()*1.5, a:Math.random()*0.5+0.1 }));
+      function tick(){ ctx.clearRect(0,0,canvas.width,canvas.height); stars.forEach(s=>{ ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fillStyle=`rgba(255,255,255,${s.a})`; ctx.fill(); s.a += (Math.random() - .5)*.02; if (s.a<.1) s.a=.1; if (s.a>.6) s.a=.6;}); requestAnimationFrame(tick); }
+      tick(); window.addEventListener('resize', size);
+      window.__starfield={canvas,ctx,num,stars};
+    })();
+
+    // --------- Initial render ---------
+    renderApp();
+
+    // --------- Simple runtime tests (run only when editing is allowed) ---------
+    if (ALLOW_EDIT) (function(){
+      const out = document.getElementById('test-results');
+      function assert(name, ok){ return {name, ok}; }
+      const res=[];
+      try { res.push(assert('Has 6 projects', Array.isArray(state.projects)&&state.projects.length===6)); } catch(e){ res.push(assert('Has 6 projects', false)); }
+      try { const btn=document.querySelector('button.fixed'); res.push(assert('Mode toggle present', !!btn)); if(btn){ const t1=btn.textContent; btn.click(); const t2=btn.textContent; res.push(assert('Toggle text changes', t1!==t2)); btn.click(); } } catch(e){ res.push(assert('Toggle works', false)); }
+      try { const sf=window.__starfield; res.push(assert('Starfield init', !!sf && sf.stars.length===sf.num)); } catch(e){ res.push(assert('Starfield init', false)); }
+      try { // PV overlay open/close
+        const toViewBtn=document.querySelector('button.fixed'); if(toViewBtn && /View/.test(toViewBtn.textContent)) toViewBtn.click();
+        const pvCard=[...document.querySelectorAll('.project-card h3')].find(h=>/PV Energy and Storage Systems/.test(h.textContent));
+        res.push(assert('PV card exists', !!pvCard));
+        if(pvCard){ pvCard.dispatchEvent(new MouseEvent('click',{bubbles:true})); const opened=!!document.querySelector('.overlay-card'); res.push(assert('Overlay opened', opened)); const close=document.querySelector('.overlay-card button'); if(close){ close.click(); } const closed=!document.querySelector('.overlay-card'); res.push(assert('Overlay closed', closed)); }
+      } catch(e){ res.push(assert('PV overlay scenarios', false)); }
+      out.innerHTML = `<div class="font-bold mb-1">Tests: ${res.filter(r=>r.ok).length}/${res.length} passed</div>` + res.map(r=>`<div>${r.ok?'✅':'❌'} ${r.name}</div>`).join('');
+    })();
+    else { const box = document.getElementById('test-results'); if (box) box.style.display = 'none'; }
+  </script>
+</body>
+</html>
